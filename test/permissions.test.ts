@@ -161,6 +161,28 @@ describe("checkWritePermissions", () => {
     );
   });
 
+  test("should return true for non-user actors (404 from collaborator API)", async () => {
+    const error = Object.assign(new Error("Copilot is not a user"), {
+      status: 404,
+    });
+    const mockOctokit = {
+      repos: {
+        getCollaboratorPermissionLevel: async () => {
+          throw error;
+        },
+      },
+    } as any;
+    const context = createContext();
+    context.actor = "Copilot";
+
+    const result = await checkWritePermissions(mockOctokit, context);
+
+    expect(result).toBe(true);
+    expect(coreInfoSpy).toHaveBeenCalledWith(
+      "Actor 'Copilot' is not a GitHub user (HTTP 404). Deferring to bot/actor validation.",
+    );
+  });
+
   test("should call API with correct parameters", async () => {
     let capturedParams: any;
     const mockOctokit = {
