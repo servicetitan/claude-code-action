@@ -66,7 +66,19 @@ export async function checkWritePermissions(
       core.warning(`Actor has insufficient permissions: ${permissionLevel}`);
       return false;
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    // 404 means the actor is not a regular GitHub user (e.g. "Copilot",
+    // GitHub Apps without the [bot] suffix). Defer to checkHumanActor()
+    // which handles allowed_bots logic, instead of hard-failing here.
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      core.info(
+        `Actor '${actor}' is not a GitHub user (HTTP 404). ` +
+          `Deferring to bot/actor validation.`,
+      );
+      return true;
+    }
+
     core.error(`Failed to check permissions: ${error}`);
     throw new Error(`Failed to check permissions for ${actor}: ${error}`);
   }
