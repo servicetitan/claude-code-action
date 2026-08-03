@@ -199,6 +199,30 @@ describe("detectMode with enhanced routing", () => {
   });
 
   describe("Automation Events (should error with track_progress)", () => {
+    it("should use agent mode for push with a prompt", () => {
+      const context: GitHubContext = {
+        ...baseContext,
+        eventName: "push",
+        payload: {} as any,
+        inputs: { ...baseContext.inputs, prompt: "Synchronize prototype" },
+      };
+
+      expect(detectMode(context)).toBe("agent");
+    });
+
+    it("should throw error when track_progress is used with push", () => {
+      const context: GitHubContext = {
+        ...baseContext,
+        eventName: "push",
+        payload: {} as any,
+        inputs: { ...baseContext.inputs, trackProgress: true },
+      };
+
+      expect(() => detectMode(context)).toThrow(
+        /track_progress is only supported /,
+      );
+    });
+
     it("should throw error when track_progress is used with workflow_dispatch", () => {
       const context: GitHubContext = {
         ...baseContext,

@@ -6,6 +6,7 @@ import type {
   PullRequestEvent,
   PullRequestReviewEvent,
   PullRequestReviewCommentEvent,
+  PushEvent,
   WorkflowRunEvent,
 } from "@octokit/webhooks-types";
 import { CLAUDE_APP_BOT_ID, CLAUDE_BOT_LOGIN } from "./constants";
@@ -61,6 +62,7 @@ const ENTITY_EVENT_NAMES = [
 ] as const;
 
 const AUTOMATION_EVENT_NAMES = [
+  "push",
   "workflow_dispatch",
   "repository_dispatch",
   "schedule",
@@ -118,10 +120,11 @@ export type ParsedGitHubContext = BaseContext & {
   isPR: boolean;
 };
 
-// Context for automation events (workflow_dispatch, repository_dispatch, schedule, workflow_run)
+// Context for automation events (push, workflow_dispatch, repository_dispatch, schedule, workflow_run)
 export type AutomationContext = BaseContext & {
   eventName: AutomationEventName;
   payload:
+    | PushEvent
     | WorkflowDispatchEvent
     | RepositoryDispatchEvent
     | ScheduleEvent
@@ -168,6 +171,13 @@ export function parseGitHubContext(): GitHubContext {
   };
 
   switch (context.eventName) {
+    case "push": {
+      return {
+        ...commonFields,
+        eventName: "push",
+        payload: context.payload as PushEvent,
+      };
+    }
     case "issues": {
       const payload = context.payload as IssuesEvent;
       return {
