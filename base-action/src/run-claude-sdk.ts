@@ -8,6 +8,7 @@ import type {
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ParsedSdkOptions } from "./parse-sdk-options";
+import { LiveObservationReader } from "./live-observations";
 
 export type ClaudeRunResult = {
   executionFile?: string;
@@ -156,10 +157,17 @@ export async function runClaudeWithSdk(
 
   const messages: SDKMessage[] = [];
   let resultMessage: SDKResultMessage | undefined;
+  const observations = new LiveObservationReader(
+    process.env.CLAUDE_LIVE_OBSERVATIONS_FILE,
+  );
 
   try {
     for await (const message of query({ prompt, options: sdkOptions })) {
       messages.push(message);
+
+      for (const observation of observations.drain()) {
+        console.log(observation);
+      }
 
       const sanitized = sanitizeSdkOutput(message, showFullOutput);
       if (sanitized) {
@@ -169,6 +177,9 @@ export async function runClaudeWithSdk(
       if (message.type === "result") {
         resultMessage = message as SDKResultMessage;
       }
+    }
+    for (const observation of observations.drain()) {
+      console.log(observation);
     }
   } catch (error) {
     console.error("SDK execution error:", error);
