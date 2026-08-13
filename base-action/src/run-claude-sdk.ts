@@ -160,14 +160,48 @@ export async function runClaudeWithSdk(
   const observations = new LiveObservationReader(
     process.env.CLAUDE_LIVE_OBSERVATIONS_FILE,
   );
+  const inactivityTimeoutMs = Number(
+    process.env.CLAUDE_INACTIVITY_TIMEOUT_MS ?? "0",
+  );
+  if (!Number.isFinite(inactivityTimeoutMs) || inactivityTimeoutMs < 0) {
+    throw new Error(
+      "CLAUDE_INACTIVITY_TIMEOUT_MS must be a non-negative number",
+    );
+  }
 
   try {
-    for await (const message of query({ prompt, options: sdkOptions })) {
-      messages.push(message);
-
-      for (const observation of observations.drain()) {
-        console.log(observation);
+    const claudeQuery = query({ prompt, options: sdkOptions });
+    let nextMessage = claudeQuery.next();
+    let lastActivityAt = Date.now();
+    while (true) {
+      const outcome = await Promise.race([
+        nextMessage.then((result) => ({ type: "message" as const, result })),
+        new Promise<{ type: "tick" }>((resolve) =>
+          setTimeout(() => resolve({ type: "tick" }), 5_000),
+        ),
+      ]);
+      const live = observations.drain();
+      if (live.length > 0) {
+        lastActivityAt = Date.now();
+        for (const observation of live) console.log(observation);
       }
+      if (outcome.type === "tick") {
+        if (
+          inactivityTimeoutMs > 0 &&
+          Date.now() - lastActivityAt >= inactivityTimeoutMs
+        ) {
+          await claudeQuery.return(undefined);
+          throw new Error(
+            `Claude produced no SDK or progress events for ${inactivityTimeoutMs}ms`,
+          );
+        }
+        continue;
+      }
+
+      if (outcome.result.done) break;
+      const message = outcome.result.value;
+      lastActivityAt = Date.now();
+      messages.push(message);
 
       const sanitized = sanitizeSdkOutput(message, showFullOutput);
       if (sanitized) {
@@ -177,6 +211,7 @@ export async function runClaudeWithSdk(
       if (message.type === "result") {
         resultMessage = message as SDKResultMessage;
       }
+      nextMessage = claudeQuery.next();
     }
     for (const observation of observations.drain()) {
       console.log(observation);

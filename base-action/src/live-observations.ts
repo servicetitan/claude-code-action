@@ -51,7 +51,9 @@ export class LiveObservationReader {
       }
       if (size === this.offset) return [];
 
-      const contents = readFileSync(this.filePath, "utf8").slice(this.offset);
+      const contents = readFileSync(this.filePath)
+        .subarray(this.offset)
+        .toString("utf8");
       this.offset = size;
       const lines = `${this.remainder}${contents}`.split(/\r?\n/);
       this.remainder = lines.pop() ?? "";
